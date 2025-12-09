@@ -111,7 +111,7 @@ TEXT_HIGHLIGHT_DEBATE_PROMPT_TEMPLATE = """# ROLE: Meticulous Communications Ana
 
 # ================== INSTRUCTIONS ==================
 
-1. Scan the transcript in order and locate each moderator/host question (or audience question). Treat each distinct question as one highlight block.
+1. Scan the transcript in order and locate each moderator/host question (or audience question). Treat each distinct question as one highlight block. If a question is implied but not verbatim, paraphrase it clearly.
 2. For each question, capture:
    - The exact question text (paraphrase only if needed for clarity).
    - A concise summary of every candidate’s answer to that question.
@@ -119,7 +119,8 @@ TEXT_HIGHLIGHT_DEBATE_PROMPT_TEMPLATE = """# ROLE: Meticulous Communications Ana
 4. When summarizing answers, name the candidate and give a single-sentence summary of their response. Keep to one claim per candidate. Include a short direct quote in double quotes if it conveys the core point (e.g., “life at conception”).
 5. Capture every candidate who answers. If the transcript does not show an answer for a candidate, note “No response captured.”
 6. Omit small talk or applause unless it contains a substantive answer.
-7. Do NOT assume names; use the name/label given in the transcript (e.g., “Adam Steen”, “Moderator”, “Candidate A”).
+7. If no explicit questions are present, infer the best question from the moderator prompt or topic and still create a block—never return an empty result.
+8. Do NOT assume names; use the name/label given in the transcript (e.g., “Adam Steen”, “Moderator”, “Candidate A”).
 
 # ================== OUTPUT FORMAT (PLAIN TEXT ONLY) ==================
 
