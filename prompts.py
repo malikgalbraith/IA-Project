@@ -93,6 +93,58 @@ Example input: I think the candidate for Mayor is a bad choice.
 # Begin Extraction:
 """
 
+TEXT_HIGHLIGHT_DEBATE_PROMPT_TEMPLATE = """# ROLE: Meticulous Communications Analyst & Information Extractor. Follow every rule exactly.
+
+# GOAL: Extract specific and impactful political statements, claims, or contrasts from ALL participants in the debate. Attribute each bullet to the person who spoke or was directly discussed.
+
+# --- CONTEXTUAL METADATA (Use for source/date identification) ---
+# Source Title: {video_title}
+# Source Provider: {video_platform} # Default source provider
+# Provider Channel/Uploader: {video_uploader} # Use as potential source if needed
+# Upload Date (YYYYMMDD): {video_upload_date} # Default date
+# Source URL: {video_url} # Default URL
+# --- END METADATA ---
+
+# --- TRANSCRIPT TEXT ---
+{transcript_text}
+# --- END TRANSCRIPT ---
+
+# ================== INSTRUCTIONS ==================
+
+1. **Extract bullet points** based ONLY on the transcript above.
+2. Maintain chronological order. The bullet points must appear in the same order the statements occur in the transcript.
+3. **Each bullet should reflect a SINGLE, standalone factual or rhetorical claim** made by or directly about a specific participant. Do not merge multiple claims.
+4. Always include the speaking participant in the headline so it is clear who made the claim (e.g., "Haley argued...", "Moderator pressed Trump about...", "Ramaswamy criticized Haley...").
+5. Use the speaker’s own words where impactful, but keep bullets concise. When the claim is about another participant, make that clear in the headline.
+6. Include claims from moderators or interviewers when they present facts or challenges about a participant.
+7. Include ALL necessary details but avoid unnecessary synonyms or embellishment.
+8. Omit small talk and jokes unless they contain a meaningful claim or contrast.
+9. When in doubt about including a statement, include it—err on the side of capturing key debate exchanges.
+10. Do NOT assume a name unless explicitly stated in the transcript. If a participant is referenced without a name, use their role (e.g., "Moderator", "Candidate").
+    
+# ================== OUTPUT FORMAT (PLAIN TEXT ONLY) ==================
+
+# For EACH bullet point extracted, output EXACTLY the following block structure, using "@@DELIM@@" as the separator:
+
+*** BULLET START ***
+**Headline:** [Concise PAST TENSE Summary (Accurately Attributed Actor) + Period. Do not include any quotations from the transcript. The output should be a clean list of highlights ready for insertion into a “Highlights” section of a tracking report.]
+@@DELIM@@
+*** BULLET END ***
+
+# Repeat the entire "*** BULLET START ***" to "*** BULLET END ***" block for each bullet.
+# Put a single blank line between each "*** BULLET END ***" and the next "*** BULLET START ***".
+
+# == CRITICAL: DO NOT ==
+#   *   DO NOT output JSON.
+#   *   DO NOT add any text before the first "*** BULLET START ***" (unless it's "@@NO BULLETS FOUND@@").
+#   *   DO NOT add any text after the final "*** BULLET END ***".
+#   *   DO NOT use markdown formatting (like **). Use the exact delimiters shown.
+#   *   DO NOT apply Title Case formatting to the **Headline:** output. Python code will handle capitalization later.
+#   *   DO NOT add surrounding double quotes or prefixes like "According to..." to the **Body:** output field.
+
+# Begin Extraction:
+"""
+
 def format_text_highlight_prompt(
     transcript_text: str,
     target_name: str,
@@ -118,8 +170,11 @@ def format_text_highlight_prompt(
 
     logging.debug(f"Formatting Text Bullet prompt: Title='{title}', Uploader='{uploader}', Date='{upload_date}', Platform='{platform_display}', URL='{url}'")
 
+    is_debate = str(target_name).strip().lower() == "debate"
+    template = TEXT_HIGHLIGHT_DEBATE_PROMPT_TEMPLATE if is_debate else TEXT_HIGHLIGHT_PROMPT_TEMPLATE
+
     try:
-        return TEXT_HIGHLIGHT_PROMPT_TEMPLATE.format(
+        return template.format(
             target_name=target_name,
             transcript_text=transcript_text,
             video_title=title,
