@@ -137,6 +137,19 @@ TEXT_HIGHLIGHT_DEBATE_PROMPT_TEMPLATE = """# ROLE: Meticulous Communications Ana
 # Repeat the entire "*** BULLET START ***" to "*** BULLET END ***" block for each question.
 # Put a single blank line between each "*** BULLET END ***" and the next "*** BULLET START ***".
 
+# === EXAMPLE REFERENCE (JSON for clarity, DO NOT OUTPUT JSON) ===
+# [
+#   {
+#     "headline": "Would you end property taxes?",
+#     "answers": [
+#       {"name": "Eddie Andrews", "summary": "\"add a sales tax\" and cut the assessor’s office to replace property tax"},
+#       {"name": "Brad Sherman", "summary": "\"tough to eliminate\" but wants targeted relief for seniors and longtime owners"},
+#       {"name": "Adam Steen", "summary": "called it irresponsible to eliminate but said spending is the real problem"}
+#     ]
+#   }
+# ]
+# Convert this structure into the exact block format above: headline question line, then each answer as a dash-prefixed line under Body.
+
 # == CRITICAL: DO NOT ==
 #   * DO NOT output JSON.
 #   * DO NOT add any text before the first "*** BULLET START ***" (unless it's "@@NO BULLETS FOUND@@").
