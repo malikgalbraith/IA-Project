@@ -19,6 +19,50 @@ import textwrap
 import re
 from typing import List, Dict, Any, Optional
 
+def format_display_date(raw_upload_date: Any, short: bool = False) -> str:
+    """
+    Formats upload date strings with an option for a short MM/DD/YY variant.
+    Falls back to the raw string when parsing fails.
+    """
+    display_date = "Date Unknown"
+    if not raw_upload_date:
+        return display_date
+
+    raw_str = str(raw_upload_date).strip()
+
+    # Allow already formatted dates to pass through unchanged
+    if "/" in raw_str and short:
+        return raw_str
+
+    try:
+        dt_obj = datetime.strptime(raw_str, "%Y%m%d")
+        return dt_obj.strftime("%m/%d/%y" if short else "%B %d, %Y")
+    except (ValueError, TypeError):
+        # If parsing fails, return the raw string
+        return raw_str or display_date
+
+
+def format_duration_value(duration_value: Any) -> Optional[str]:
+    """
+    Formats a duration value in seconds into a friendly string.
+    Examples: 5700 -> '1h 35m', 185 -> '3m 5s'
+    """
+    if duration_value is None:
+        return None
+    try:
+        total_seconds = float(duration_value)
+        hours = int(total_seconds // 3600)
+        minutes = int((total_seconds % 3600) // 60)
+        seconds = int(total_seconds % 60)
+
+        if hours > 0:
+            if seconds:
+                return f"{hours}h {minutes}m {seconds}s"
+            return f"{hours}h {minutes}m"
+        return f"{minutes}m {seconds}s"
+    except Exception:
+        return str(duration_value)
+
 def _title_case_word(word: str) -> str:
     """
     Helper function to apply specific title casing rules to a single word.
@@ -153,96 +197,46 @@ def generate_report_highlights(
     html_or_docx: str
 ) -> str:
     """
-    Generates a complete HTML research report based on the extracted data.
-    Constructs a self-contained HTML document including video metadata,
-    formatted/cited bullet points, and the full transcript.
-    The main report title is dynamically generated based on available metadata.
-
-    Args:
-        metadata: Dictionary containing video metadata (title, uploader, date, etc.).
-        extracted_bullets_raw: List of raw bullet point dictionaries.
-        transcript_text: The full transcript text.
-        target_name: The research subject name.
-        html_or_docx: Whether to include the html formatting or not
-
-    Returns:
-        A string containing the complete HTML content of the report.
+    Generates a research report focused on highlights.
+    When the target is "Debate", the report is formatted around the debate title,
+    uses a short date style, and omits platform clutter to mirror the provided example.
     """
     logging.info(f"Generating HTML report for {target_name}...")
     print("extracted_bullets_raw", extracted_bullets_raw)
-    # --- Determine Report Title Components ---
-    report_prefix = "Tracking Report" # Or "Analysis", "Research Report", etc.
 
-    # Determine Source Context (Uploader > Platform > Default)
+    is_debate = str(target_name).strip().lower() == "debate"
+    report_prefix = "Tracking Report"
+
+    title_value = metadata.get('title', '').strip()
     uploader = metadata.get('uploader', '').strip()
     extractor = metadata.get('extractor', '').strip()
-    source_context = "Unknown Source" # Default fallback
-
-    # Get video type
-    type_input = metadata.get('type_input', '').strip()
-    type_input = type_input.upper()
+    source_context = "Unknown Source"
 
     if uploader and uploader.lower() not in ['unknown uploader', 'n/a', '']:
         source_context = uploader
     elif extractor and extractor.lower() not in ['unknown', 'n/a', '']:
         source_context = extractor.replace('_', ' ').title()
-        if source_context.lower() == 'youtube': source_context = 'YouTube'
-        if source_context.lower() == 'vimeo': source_context = 'Vimeo'
+        if source_context.lower() == 'youtube':
+            source_context = 'YouTube'
+        if source_context.lower() == 'vimeo':
+            source_context = 'Vimeo'
 
-    # Format Date (with robust fallback)
     raw_upload_date = metadata.get('upload_date')
-    display_date = "Date Unknown" # Fallback
-    if raw_upload_date:
-        try:
-            dt_obj = datetime.strptime(str(raw_upload_date), "%Y%m%d")
-            display_date = dt_obj.strftime("%B %d, %Y")
-        except (ValueError, TypeError):
-             if re.match(r'^\d{8}$', str(raw_upload_date)):
-                 pass
-             else:
-                 display_date = str(raw_upload_date)
+    display_date = format_display_date(raw_upload_date, short=is_debate)
 
-    report_title = f"{report_prefix}: {target_name} via {source_context} ({display_date})"
+    display_target = title_value if is_debate and title_value else target_name
+    report_title = f"{report_prefix}: {display_target}" if is_debate else f"{report_prefix}: {target_name} via {source_context} ({display_date})"
 
-    # --- Determine Report Title Components ---
-    report_prefix = "Tracking Report" # Or "Analysis", "Research Report", etc.
+    url = metadata.get('webpage_url', '#')
+    duration_str = format_duration_value(metadata.get('duration'))
 
-    # Determine Source Context (Uploader > Platform > Default)
-    uploader = metadata.get('uploader', '').strip()
-    extractor = metadata.get('extractor', '').strip()
-    source_context = "Unknown Source" # Default fallback
-
-    if uploader and uploader.lower() not in ['unknown uploader', 'n/a', '']:
-        source_context = uploader
-    elif extractor and extractor.lower() not in ['unknown', 'n/a', '']:
-        source_context = extractor.replace('_', ' ').title()
-        if source_context.lower() == 'youtube': source_context = 'YouTube'
-        if source_context.lower() == 'vimeo': source_context = 'Vimeo'
-
-    # Format Date (with robust fallback)
-    raw_upload_date = metadata.get('upload_date')
-    display_date = "Date Unknown" # Fallback
-    if raw_upload_date:
-        try:
-            dt_obj = datetime.strptime(str(raw_upload_date), "%Y%m%d")
-            display_date = dt_obj.strftime("%B %d, %Y")
-        except (ValueError, TypeError):
-             if re.match(r'^\d{8}$', str(raw_upload_date)):
-                 pass
-             else:
-                 display_date = str(raw_upload_date)
-
-    report_title = f"{report_prefix}: {target_name} via {source_context} ({display_date})"
     html_parts = []
-
     if html_or_docx == "html":
-        # --- HTML Boilerplate and CSS ---
         html_parts = [
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
-            # Use a distinct <title> for the browser tab vs the <h1> heading
-            f"<title>Report: {target_name} - {source_context} ({display_date})</title>",
+            f"<title>Report: {display_target} - {source_context} ({display_date})</title>",
             "<meta charset=\"UTF-8\">",
             "<style>",
             """
@@ -278,7 +272,6 @@ def generate_report_highlights(
             }
             
             .meta {
-                # background: #f5f5f5;
                 padding: 10px;
                 border-radius: 5px;
                 margin-bottom: 24pt;
@@ -291,7 +284,6 @@ def generate_report_highlights(
             .bullets-list {
                 list-style-type: disc;
                 padding-left: 1.5em;
-                # margin-bottom: 24pt;
             }
             
             .bullets-list li {
@@ -308,22 +300,10 @@ def generate_report_highlights(
                 color: purple;
             }
             
-            .timestamp {
-                margin-top: 24pt;
-                padding-top: 6pt;
-                border-top: 1pt solid #ccc;
-                color: #888;
-                font-size: 9pt;
-                text-align: center;
-            }
-            
             .transcript {
                 white-space: pre-wrap;
                 font-family: monospace;
-                # background-color: #f8f8f8;
-                # padding: 12pt;
                 border: 1px solid #ddd;
-                # margin-top: 4pt; /* Increase space above transcript */
                 word-wrap: break-word;
                 overflow-wrap: break-word;
             }
@@ -331,81 +311,65 @@ def generate_report_highlights(
             "</style>",
             "</head>",
             "<body>",
-            # Use the main class name "research-dossier"
             "<div class=\"research-dossier\">",
-    ] # Close the html_parts list definition
-        
+        ]
+
     html_parts.append(f"<h1>{html.escape(report_title)}</h1>")
 
     # --- Metadata Section ---
     html_parts.append("<div class=\"meta\">")
-    # html_parts.append("<h3>Video Metadata</h3>")
-    html_parts.append(f"<p><strong>Title:</strong> {html.escape(metadata.get('title', 'N/A'))}</p>")
-    html_parts.append(f"<p><strong>Uploader/Channel:</strong> {html.escape(metadata.get('uploader', 'N/A'))}</p>")
+    html_parts.append(f"<p><strong>Title:</strong> {html.escape(title_value or display_target)}</p>")
+    html_parts.append(f"<p><strong>Uploader/Channel:</strong> {html.escape(uploader or 'N/A')}</p>")
     html_parts.append(f"<p><strong>Upload Date:</strong> {display_date}</p>")
-    html_parts.append(f"<p><strong>Platform:</strong> {html.escape(metadata.get('extractor', 'N/A'))}</p>")
-    url = metadata.get('webpage_url', '#')
+    if not is_debate:
+        html_parts.append(f"<p><strong>Platform:</strong> {html.escape(extractor)}</p>")
     html_parts.append(f"<p><strong>URL:</strong> <a href=\"{html.escape(url)}\" target=\"_blank\">{html.escape(url)}</a></p>")
-    duration_sec = metadata.get('duration')
-    if duration_sec:
-        try:
-            html_parts.append(f"<p><strong>Duration:</strong> {int(duration_sec // 60)}m {int(duration_sec % 60)}s</p>")
-        except TypeError:
-            html_parts.append(f"<p><strong>Duration:</strong> {html.escape(str(duration_sec))} (raw)</p>")
+    if duration_str:
+        html_parts.append(f"<p><strong>Duration:</strong> {duration_str}</p>")
 
     # --- Bullets Section ---
     html_parts.append("<h3>HIGHLIGHTS</h3>")
     html_parts.append("<ul class=\"bullets-list\">")
     if extracted_bullets_raw:
-        # Ensure you use html.escape() on headline_raw, body_raw before placing them in HTML
-          for bullet_data in extracted_bullets_raw:
-             logging.debug(f"Processing bullet_data: {bullet_data}")
-             headline = bullet_data.get('headline_raw', 'N/A')
-             # formatted_body = bullet_data.get('body_raw', 'N/A')
-             speaker = bullet_data.get('speaker_raw', 'N/A')
-             source = bullet_data.get('source_raw', 'Unknown Source')
-             # Format date for citation (M/D/YY)
-             raw_bullet_date = bullet_data.get('date_raw')
-             formatted_date_mdy = 'Date Unknown' # Default fallback
-             if raw_bullet_date:
-                 try:
-                     # Assuming date_raw is in YYYYMMDD format
-                     dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
-                     # Use %#m/%#d/%y for Windows to remove leading zeros
-                     formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
-                 except (ValueError, TypeError):
-                      # If parsing fails, use the raw value as fallback
-                      formatted_date_mdy = str(raw_bullet_date)
-                     
-             safe_source = html.escape(source)
-             safe_formatted_date_mdy = html.escape(formatted_date_mdy)
+        for bullet_data in extracted_bullets_raw:
+            logging.debug(f"Processing bullet_data: {bullet_data}")
+            headline = bullet_data.get('headline_raw', 'N/A')
+            source = bullet_data.get('source_raw', 'Unknown Source')
+            raw_bullet_date = bullet_data.get('date_raw')
+            formatted_date_mdy = 'Date Unknown'
+            if raw_bullet_date:
+                try:
+                    dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
+                    formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
+                except (ValueError, TypeError):
+                    formatted_date_mdy = str(raw_bullet_date)
 
-             if url and url != '#':
-                  # Escape URL for the href attribute
-                  safe_url = html.escape(url.replace('"', '"')) # Replace quotes then escape
-                  if not safe_url.startswith(('http://', 'https://')): safe_url = 'http://' + safe_url
-                  # Use the already escaped date for the link text
-                  safe_link_text = safe_formatted_date_mdy
-                  citation = citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>]'
-             else:
-                  # Use already escaped components
-                  citation = f'[{safe_source}, {safe_formatted_date_mdy}]'
+            safe_source = html.escape(source)
+            safe_formatted_date_mdy = html.escape(formatted_date_mdy)
 
-             safe_headline = html.escape(headline)
-             html_parts.append(f"<li>{safe_headline}</li>")
+            if url and url != '#':
+                safe_url = html.escape(url.replace('"', '"'))
+                if not safe_url.startswith(('http://', 'https://')):
+                    safe_url = 'http://' + safe_url
+                safe_link_text = safe_formatted_date_mdy
+                citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>]'
+            else:
+                citation = f'[{safe_source}, {safe_formatted_date_mdy}]'
+
+            safe_headline = html.escape(headline)
+            html_parts.append(f"<li>{safe_headline}</li>")
     else:
         html_parts.append("<p>No relevant bullets were extracted. Using Highlights</p>")
-    html_parts.append("</div>") # Close bullets-container
+    html_parts.append("</ul>")
 
     # --- Full Transcript Section ---
     html_parts.append("<h3>TRANSCRIPT</h3>")
-    safe_transcript = html.escape(transcript_text if transcript_text else "Transcript unavailable.")
-    # html_parts.append(f"<div class=\"transcript\">{safe_transcript}</div>")
-    html_parts.append(transcript_text)  # Already wrapped in <p> tags
+    html_parts.append(transcript_text if transcript_text else "Transcript unavailable.")
 
     # --- Closing HTML ---
-    html_parts.append("</div>")  # Close research-dossier
-    html_parts.append("</body></html>")
+    html_parts.append("</div>")
+    if html_or_docx == "html":
+        html_parts.append("</body></html>")
 
     logging.info("HTML report string generated.")
     return "\n".join(html_parts)
@@ -419,95 +383,45 @@ def generate_report_bullets(
     html_or_docx: str
 ) -> str:
     """
-    Generates a complete HTML research report based on the extracted data.
-    Constructs a self-contained HTML document including video metadata,
-    formatted/cited bullet points, and the full transcript.
-    The main report title is dynamically generated based on available metadata.
-
-    Args:
-        metadata: Dictionary containing video metadata (title, uploader, date, etc.).
-        extracted_bullets_raw: List of raw bullet point dictionaries.
-        transcript_text: The full transcript text.
-        target_name: The research subject name.
-        html_or_docx: Whether or not to include html formatting.
-
-    Returns:
-        A string containing the complete HTML content of the report.
+    Generates a research report with detailed bullets.
+    When the target is "Debate", the report leans on the debate title and uses a short date format.
     """
     logging.info(f"Generating HTML report for {target_name}...")
 
-    # --- Determine Report Title Components ---
-    report_prefix = "Tracking Report" # Or "Analysis", "Research Report", etc.
+    is_debate = str(target_name).strip().lower() == "debate"
+    report_prefix = "Tracking Report"
 
-    # Determine Source Context (Uploader > Platform > Default)
+    title_value = metadata.get('title', '').strip()
     uploader = metadata.get('uploader', '').strip()
     extractor = metadata.get('extractor', '').strip()
-    source_context = "Unknown Source" # Default fallback
+    type_input = metadata.get('type_input', '').strip().upper()
+    source_context = "Unknown Source"
 
     if uploader and uploader.lower() not in ['unknown uploader', 'n/a', '']:
         source_context = uploader
     elif extractor and extractor.lower() not in ['unknown', 'n/a', '']:
         source_context = extractor.replace('_', ' ').title()
-        if source_context.lower() == 'youtube': source_context = 'YouTube'
-        if source_context.lower() == 'vimeo': source_context = 'Vimeo'
+        if source_context.lower() == 'youtube':
+            source_context = 'YouTube'
+        if source_context.lower() == 'vimeo':
+            source_context = 'Vimeo'
 
-    # Format Date (with robust fallback)
     raw_upload_date = metadata.get('upload_date')
-    display_date = "Date Unknown" # Fallback
-    if raw_upload_date:
-        try:
-            dt_obj = datetime.strptime(str(raw_upload_date), "%Y%m%d")
-            display_date = dt_obj.strftime("%B %d, %Y")
-        except (ValueError, TypeError):
-             if re.match(r'^\d{8}$', str(raw_upload_date)):
-                 pass
-             else:
-                 display_date = str(raw_upload_date)
+    display_date = format_display_date(raw_upload_date, short=is_debate)
 
-    report_title = f"{report_prefix}: {target_name} via {source_context} ({display_date})"
+    display_target = title_value if is_debate and title_value else target_name
+    report_title = f"{report_prefix}: {display_target}" if is_debate else f"{report_prefix}: {target_name} via {source_context} ({display_date})"
 
-    # --- Determine Report Title Components ---
-    report_prefix = "Tracking Report" # Or "Analysis", "Research Report", etc.
+    url = metadata.get('webpage_url', '#')
+    duration_str = format_duration_value(metadata.get('duration'))
 
-    # Determine Source Context (Uploader > Platform > Default)
-    uploader = metadata.get('uploader', '').strip()
-    extractor = metadata.get('extractor', '').strip()
-    source_context = "Unknown Source" # Default fallback
-
-    # Get video type
-    type_input = metadata.get('type_input', '').strip()
-    type_input = type_input.upper()
-
-    if uploader and uploader.lower() not in ['unknown uploader', 'n/a', '']:
-        source_context = uploader
-    elif extractor and extractor.lower() not in ['unknown', 'n/a', '']:
-        source_context = extractor.replace('_', ' ').title()
-        if source_context.lower() == 'youtube': source_context = 'YouTube'
-        if source_context.lower() == 'vimeo': source_context = 'Vimeo'
-
-    # Format Date (with robust fallback)
-    raw_upload_date = metadata.get('upload_date')
-    display_date = "Date Unknown" # Fallback
-    if raw_upload_date:
-        try:
-            dt_obj = datetime.strptime(str(raw_upload_date), "%Y%m%d")
-            display_date = dt_obj.strftime("%B %d, %Y")
-        except (ValueError, TypeError):
-             if re.match(r'^\d{8}$', str(raw_upload_date)):
-                 pass
-             else:
-                 display_date = str(raw_upload_date)
-
-    report_title = f"{report_prefix}: {target_name} via {source_context} ({display_date})"
     html_parts = []
-
     if html_or_docx == "html":
         html_parts = [
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
-            # Use a distinct <title> for the browser tab vs the <h1> heading
-            f"<title>Report: {target_name} - {source_context} ({display_date})</title>",
+            f"<title>Report: {display_target} - {source_context} ({display_date})</title>",
             "<meta charset=\"UTF-8\">",
             "<style>",
             """
@@ -543,7 +457,6 @@ def generate_report_bullets(
             }
             
             .meta {
-                # background: #f5f5f5;
                 padding: 10px;
                 border-radius: 5px;
                 margin-bottom: 24pt;
@@ -556,7 +469,6 @@ def generate_report_bullets(
             .bullets-list {
                 list-style-type: disc;
                 padding-left: 1.5em;
-                # margin-bottom: 24pt;
             }
             
             .bullets-list li {
@@ -573,22 +485,10 @@ def generate_report_bullets(
                 color: purple;
             }
             
-            .timestamp {
-                margin-top: 24pt;
-                padding-top: 6pt;
-                border-top: 1pt solid #ccc;
-                color: #888;
-                font-size: 9pt;
-                text-align: center;
-            }
-            
             .transcript {
                 white-space: pre-wrap;
                 font-family: monospace;
-                # background-color: #f8f8f8;
-                # padding: 12pt;
                 border: 1px solid #ddd;
-                # margin-top: 4pt; /* Increase space above transcript */
                 word-wrap: break-word;
                 overflow-wrap: break-word;
             }
@@ -596,92 +496,73 @@ def generate_report_bullets(
             "</style>",
             "</head>",
             "<body>",
-            # Use the main class name "research-dossier"
             "<div class=\"research-dossier\">",
-    ] # Close the html_parts list definition
+        ]
 
     html_parts.append(f"<h1>{html.escape(report_title)}</h1>")
 
     # --- Metadata Section ---
     html_parts.append("<div class=\"meta\">")
-    # html_parts.append("<h2>Video Metadata</h2>")
-    html_parts.append(f"<p><strong>Title:</strong> {html.escape(metadata.get('title', 'N/A'))}</p>")
-    html_parts.append(f"<p><strong>Uploader/Channel:</strong> {html.escape(metadata.get('uploader', 'N/A'))}</p>")
+    html_parts.append(f"<p><strong>Title:</strong> {html.escape(title_value or display_target)}</p>")
+    html_parts.append(f"<p><strong>Uploader/Channel:</strong> {html.escape(uploader or 'N/A')}</p>")
     html_parts.append(f"<p><strong>Upload Date:</strong> {display_date}</p>")
-    html_parts.append(f"<p><strong>Platform:</strong> {html.escape(metadata.get('extractor', 'N/A'))}</p>")
-    html_parts.append(f"<p><strong>File Type:</strong> {type_input}</p>")
-    
-    url = metadata.get('webpage_url', '#')
+    if not is_debate:
+        html_parts.append(f"<p><strong>Platform:</strong> {html.escape(extractor)}</p>")
+        html_parts.append(f"<p><strong>File Type:</strong> {type_input}</p>")
     html_parts.append(f"<p><strong>URL:</strong> <a href=\"{html.escape(url)}\" target=\"_blank\">{html.escape(url)}</a></p>")
-    duration_sec = metadata.get('duration')
-    if duration_sec:
-        try:
-            html_parts.append(f"<p><strong>Duration:</strong> {int(duration_sec // 60)}m {int(duration_sec % 60)}s</p>")
-        except TypeError:
-            html_parts.append(f"<p><strong>Duration:</strong> {html.escape(str(duration_sec))} (raw)</p>")
+    if duration_str:
+        html_parts.append(f"<p><strong>Duration:</strong> {duration_str}</p>")
     html_parts.append("</div>")
 
     # --- Bullets Section ---
     html_parts.append("<h3>BULLETS</h3>")
     html_parts.append("<div class=\"bullets-container\">")
     if extracted_bullets_raw:
-          for bullet_data in extracted_bullets_raw:
-             logging.debug(f"Processing bullet_data: {bullet_data}")
-             headline = bullet_data.get('headline_raw', 'N/A')
-             formatted_body = bullet_data.get('body_raw', 'N/A')
-             speaker = bullet_data.get('speaker_raw', 'N/A')
-             source = bullet_data.get('source_raw', 'Unknown Source')
-             # Format date for citation (M/D/YY)
-             raw_bullet_date = bullet_data.get('date_raw')
-             formatted_date_mdy = 'Date Unknown' # Default fallback
-             if raw_bullet_date:
-                 try:
-                     # Assuming date_raw is in YYYYMMDD format
-                     dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
-                     # Use %#m/%#d/%y for Windows to remove leading zeros
-                     formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
-                 except (ValueError, TypeError):
-                      # If parsing fails, use the raw value as fallback
-                      formatted_date_mdy = str(raw_bullet_date)
+        for bullet_data in extracted_bullets_raw:
+            logging.debug(f"Processing bullet_data: {bullet_data}")
+            headline = bullet_data.get('headline_raw', 'N/A')
+            formatted_body = bullet_data.get('body_raw', 'N/A')
+            source = bullet_data.get('source_raw', 'Unknown Source')
+            raw_bullet_date = bullet_data.get('date_raw')
+            formatted_date_mdy = 'Date Unknown'
+            if raw_bullet_date:
+                try:
+                    dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
+                    formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
+                except (ValueError, TypeError):
+                    formatted_date_mdy = str(raw_bullet_date)
 
-             # Escape source and date components BEFORE creating the citation string
-             safe_source = html.escape(source)
-             safe_formatted_date_mdy = html.escape(formatted_date_mdy)
+            safe_source = html.escape(source)
+            safe_formatted_date_mdy = html.escape(formatted_date_mdy)
 
-             if url and url != '#':
-                  # Escape URL for the href attribute
-                  safe_url = html.escape(url.replace('"', '"')) # Replace quotes then escape
-                  if not safe_url.startswith(('http://', 'https://')): safe_url = 'http://' + safe_url
-                  # Use the already escaped date for the link text
-                  safe_link_text = safe_formatted_date_mdy
-                  citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>] ({type_input})'
-             else:
-                  # Use already escaped components
-                  citation = f'[{safe_source}, {safe_formatted_date_mdy}] ({type_input})'
+            if url and url != '#':
+                safe_url = html.escape(url.replace('"', '"'))
+                if not safe_url.startswith(('http://', 'https://')):
+                    safe_url = 'http://' + safe_url
+                safe_link_text = safe_formatted_date_mdy
+                citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>] ({type_input})'
+            else:
+                citation = f'[{safe_source}, {safe_formatted_date_mdy}] ({type_input})'
 
-             # Escape the main headline and body text
-             # Apply strict title case to the headline before escaping
-             title_cased_headline = apply_strict_title_case_every_word(headline)
-             safe_headline = html.escape(title_cased_headline)
-             safe_body = html.escape(formatted_body)
+            title_cased_headline = apply_strict_title_case_every_word(headline)
+            safe_headline = html.escape(title_cased_headline)
+            safe_body = html.escape(formatted_body)
 
-             # Append the HTML for the formatted bullet point (uses already escaped parts)
-             html_parts.append("<div class=\"bullet\">")
-             html_parts.append(f"<p><b>{safe_headline}</b> \"{safe_body}\" {citation}</p>")
-             html_parts.append("</div>")
+            html_parts.append("<div class=\"bullet\">")
+            html_parts.append(f"<p><b>{safe_headline}</b> \"{safe_body}\" {citation}</p>")
+            html_parts.append("</div>")
     else:
         html_parts.append("<p>No relevant bullets were extracted. Using Bullets</p>")
-    html_parts.append("</div>") # Close bullets-container
+    html_parts.append("</div>")
 
     # --- Full Transcript Section ---
     html_parts.append("<h3>TRANSCRIPT</h3>")
-    safe_transcript = html.escape(transcript_text if transcript_text else "Transcript unavailable.")
-    # html_parts.append(f"<div class=\"transcript\">{safe_transcript}</div>")
-    html_parts.append(transcript_text)
+    html_parts.append(transcript_text if transcript_text else "Transcript unavailable.")
 
     # --- Closing HTML ---
-    html_parts.append("</div>") # Close research-dossier
-    html_parts.append("</body></html>")
+    html_parts.append("</div>")
+    if html_or_docx == "html":
+        html_parts.append("</body></html>")
 
     logging.info("HTML report string generated.")
     return "\n".join(html_parts)
@@ -696,96 +577,46 @@ def generate_report_both(
     html_or_docx: str
 ) -> str:
     """
-    Generates a complete HTML research report based on the extracted data.
-    Constructs a self-contained HTML document including video metadata,
-    formatted/cited bullet points, and the full transcript.
-    The main report title is dynamically generated based on available metadata.
-
-    Args:
-        metadata: Dictionary containing video metadata (title, uploader, date, etc.).
-        extracted_bullets_raw: List of raw bullet point dictionaries.
-        transcript_text: The full transcript text.
-        target_name: The research subject name.
-        html_or_docx: Whether or not to include html formatting.
-
-    Returns:
-        A string containing the complete HTML content of the report.
+    Generates a research report containing both highlights and bullets.
+    When the target is "Debate", the report pivots to the debate title and short date format.
     """
     logging.info(f"Generating HTML report for {target_name}...")
     print("extracted_bullets_raw", extracted_bullets_raw)
-    # --- Determine Report Title Components ---
-    report_prefix = "Tracking Report" # Or "Analysis", "Research Report", etc.
 
-    # Determine Source Context (Uploader > Platform > Default)
+    is_debate = str(target_name).strip().lower() == "debate"
+    report_prefix = "Tracking Report"
+
+    title_value = metadata.get('title', '').strip()
     uploader = metadata.get('uploader', '').strip()
     extractor = metadata.get('extractor', '').strip()
-    source_context = "Unknown Source" # Default fallback
-
-    # Get video type
-    type_input = metadata.get('type_input', '').strip()
-    type_input = type_input.upper()
+    type_input = metadata.get('type_input', '').strip().upper()
+    source_context = "Unknown Source"
 
     if uploader and uploader.lower() not in ['unknown uploader', 'n/a', '']:
         source_context = uploader
     elif extractor and extractor.lower() not in ['unknown', 'n/a', '']:
         source_context = extractor.replace('_', ' ').title()
-        if source_context.lower() == 'youtube': source_context = 'YouTube'
-        if source_context.lower() == 'vimeo': source_context = 'Vimeo'
+        if source_context.lower() == 'youtube':
+            source_context = 'YouTube'
+        if source_context.lower() == 'vimeo':
+            source_context = 'Vimeo'
 
-    # Format Date (with robust fallback)
     raw_upload_date = metadata.get('upload_date')
-    display_date = "Date Unknown" # Fallback
-    if raw_upload_date:
-        try:
-            dt_obj = datetime.strptime(str(raw_upload_date), "%Y%m%d")
-            display_date = dt_obj.strftime("%B %d, %Y")
-        except (ValueError, TypeError):
-             if re.match(r'^\d{8}$', str(raw_upload_date)):
-                 pass
-             else:
-                 display_date = str(raw_upload_date)
+    display_date = format_display_date(raw_upload_date, short=is_debate)
 
-    report_title = f"{report_prefix}: {target_name} via {source_context} ({display_date})"
+    display_target = title_value if is_debate and title_value else target_name
+    report_title = f"{report_prefix}: {display_target}" if is_debate else f"{report_prefix}: {target_name} via {source_context} ({display_date})"
 
-    # --- Determine Report Title Components ---
-    report_prefix = "Tracking Report" # Or "Analysis", "Research Report", etc.
+    url = metadata.get('webpage_url', '#')
+    duration_str = format_duration_value(metadata.get('duration'))
 
-    # Determine Source Context (Uploader > Platform > Default)
-    uploader = metadata.get('uploader', '').strip()
-    extractor = metadata.get('extractor', '').strip()
-    source_context = "Unknown Source" # Default fallback
-
-    if uploader and uploader.lower() not in ['unknown uploader', 'n/a', '']:
-        source_context = uploader
-    elif extractor and extractor.lower() not in ['unknown', 'n/a', '']:
-        source_context = extractor.replace('_', ' ').title()
-        if source_context.lower() == 'youtube': source_context = 'YouTube'
-        if source_context.lower() == 'vimeo': source_context = 'Vimeo'
-
-    # Format Date (with robust fallback)
-    raw_upload_date = metadata.get('upload_date')
-    display_date = "Date Unknown" # Fallback
-    if raw_upload_date:
-        try:
-            dt_obj = datetime.strptime(str(raw_upload_date), "%Y%m%d")
-            display_date = dt_obj.strftime("%B %d, %Y")
-        except (ValueError, TypeError):
-             if re.match(r'^\d{8}$', str(raw_upload_date)):
-                 pass
-             else:
-                 display_date = str(raw_upload_date)
-
-    report_title = f"{report_prefix}: {target_name} via {source_context} ({display_date})"
     html_parts = []
-
     if html_or_docx == "html":
-        # --- HTML Boilerplate and CSS ---
         html_parts = [
             "<!DOCTYPE html>",
             "<html>",
             "<head>",
-            # Use a distinct <title> for the browser tab vs the <h1> heading
-            f"<title>Report: {target_name} - {source_context} ({display_date})</title>",
+            f"<title>Report: {display_target} - {source_context} ({display_date})</title>",
             "<meta charset=\"UTF-8\">",
             "<style>",
             """
@@ -821,7 +652,6 @@ def generate_report_both(
             }
             
             .meta {
-                # background: #f5f5f5;
                 padding: 10px;
                 border-radius: 5px;
                 margin-bottom: 24pt;
@@ -834,7 +664,6 @@ def generate_report_both(
             .bullets-list {
                 list-style-type: disc;
                 padding-left: 1.5em;
-                # margin-bottom: 24pt;
             }
             
             .bullets-list li {
@@ -851,22 +680,10 @@ def generate_report_both(
                 color: purple;
             }
             
-            .timestamp {
-                margin-top: 24pt;
-                padding-top: 6pt;
-                border-top: 1pt solid #ccc;
-                color: #888;
-                font-size: 9pt;
-                text-align: center;
-            }
-            
             .transcript {
                 white-space: pre-wrap;
                 font-family: monospace;
-                # background-color: #f8f8f8;
-                # padding: 12pt;
                 border: 1px solid #ddd;
-                # margin-top: 4pt; /* Increase space above transcript */
                 word-wrap: break-word;
                 overflow-wrap: break-word;
             }
@@ -874,141 +691,106 @@ def generate_report_both(
             "</style>",
             "</head>",
             "<body>",
-            # Use the main class name "research-dossier"
             "<div class=\"research-dossier\">",
-    ] # Close the html_parts list definition
-        
+        ]
+
     html_parts.append(f"<h1>{html.escape(report_title)}</h1>")
 
     # --- Metadata Section ---
     html_parts.append("<div class=\"meta\">")
-    # html_parts.append("<h3>Video Metadata</h3>")
-    html_parts.append(f"<p><strong>Title:</strong> {html.escape(metadata.get('title', 'N/A'))}</p>")
-    html_parts.append(f"<p><strong>Uploader/Channel:</strong> {html.escape(metadata.get('uploader', 'N/A'))}</p>")
+    html_parts.append(f"<p><strong>Title:</strong> {html.escape(title_value or display_target)}</p>")
+    html_parts.append(f"<p><strong>Uploader/Channel:</strong> {html.escape(uploader or 'N/A')}</p>")
     html_parts.append(f"<p><strong>Upload Date:</strong> {display_date}</p>")
-    html_parts.append(f"<p><strong>Platform:</strong> {html.escape(metadata.get('extractor', 'N/A'))}</p>")
-    url = metadata.get('webpage_url', '#')
+    if not is_debate:
+        html_parts.append(f"<p><strong>Platform:</strong> {html.escape(extractor)}</p>")
     html_parts.append(f"<p><strong>URL:</strong> <a href=\"{html.escape(url)}\" target=\"_blank\">{html.escape(url)}</a></p>")
-    duration_sec = metadata.get('duration')
-    if duration_sec:
-        try:
-            html_parts.append(f"<p><strong>Duration:</strong> {int(duration_sec // 60)}m {int(duration_sec % 60)}s</p>")
-        except TypeError:
-            html_parts.append(f"<p><strong>Duration:</strong> {html.escape(str(duration_sec))} (raw)</p>")
+    if duration_str:
+        html_parts.append(f"<p><strong>Duration:</strong> {duration_str}</p>")
 
-   # --- Highlights Section ---
-    # (Existing bullet processing logic remains the same)
+    # --- Highlights Section ---
     html_parts.append("<h3>HIGHLIGHTS</h3>")
     html_parts.append("<ul class=\"bullets-list\">")
     if extracted_highlights_raw:
-        # Ensure you use html.escape() on headline_raw, body_raw before placing them in HTML
-          for bullet_data in extracted_highlights_raw:
-             logging.debug(f"Processing bullet_data: {bullet_data}")
-             headline = bullet_data.get('headline_raw', 'N/A')
-             # formatted_body = bullet_data.get('body_raw', 'N/A')
-             speaker = bullet_data.get('speaker_raw', 'N/A')
-             source = bullet_data.get('source_raw', 'Unknown Source')
-             # Format date for citation (M/D/YY)
-             raw_bullet_date = bullet_data.get('date_raw')
-             formatted_date_mdy = 'Date Unknown' # Default fallback
-             if raw_bullet_date:
-                 try:
-                     # Assuming date_raw is in YYYYMMDD format
-                     dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
-                     # Use %#m/%#d/%y for Windows to remove leading zeros
-                     formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
-                 except (ValueError, TypeError):
-                      # If parsing fails, use the raw value as fallback
-                      formatted_date_mdy = str(raw_bullet_date)
+        for bullet_data in extracted_highlights_raw:
+            logging.debug(f"Processing bullet_data: {bullet_data}")
+            headline = bullet_data.get('headline_raw', 'N/A')
+            source = bullet_data.get('source_raw', 'Unknown Source')
+            raw_bullet_date = bullet_data.get('date_raw')
+            formatted_date_mdy = 'Date Unknown'
+            if raw_bullet_date:
+                try:
+                    dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
+                    formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
+                except (ValueError, TypeError):
+                    formatted_date_mdy = str(raw_bullet_date)
 
-            # Escape source and date components BEFORE creating the citation string
-             safe_source = html.escape(source)
-             safe_formatted_date_mdy = html.escape(formatted_date_mdy)
+            safe_source = html.escape(source)
+            safe_formatted_date_mdy = html.escape(formatted_date_mdy)
 
-             if url and url != '#':
-                  # Escape URL for the href attribute
-                  safe_url = html.escape(url.replace('"', '"')) # Replace quotes then escape
-                  if not safe_url.startswith(('http://', 'https://')): safe_url = 'http://' + safe_url
-                  # Use the already escaped date for the link text
-                  safe_link_text = safe_formatted_date_mdy
-                  citation = citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>]'
-             else:
-                  # Use already escaped components
-                  citation = f'[{safe_source}, {safe_formatted_date_mdy}]'
+            if url and url != '#':
+                safe_url = html.escape(url.replace('"', '"'))
+                if not safe_url.startswith(('http://', 'https://')):
+                    safe_url = 'http://' + safe_url
+                safe_link_text = safe_formatted_date_mdy
+                citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>]'
+            else:
+                citation = f'[{safe_source}, {safe_formatted_date_mdy}]'
 
-             safe_headline = html.escape(headline)
-             html_parts.append(f"<li>{safe_headline}</li>")
+            safe_headline = html.escape(headline)
+            html_parts.append(f"<li>{safe_headline}</li>")
     else:
         html_parts.append("<p>No relevant bullets were extracted. Using Highlights</p>")
-    html_parts.append("</div>") # Close bullets-container
+    html_parts.append("</ul>")
      
-    
     # --- Bullets Section ---
-    # (Existing bullet processing logic remains the same)
     html_parts.append("<h3>BULLETS</h3>")
     html_parts.append("<div class=\"bullets-container\">")
     if extracted_bullets_raw:
-        # Ensure you use html.escape() on headline_raw, body_raw before placing them in HTML
-          for bullet_data in extracted_bullets_raw:
-             logging.debug(f"Processing bullet_data: {bullet_data}")
-             headline = bullet_data.get('headline_raw', 'N/A')
-             formatted_body = bullet_data.get('body_raw', 'N/A')
-             speaker = bullet_data.get('speaker_raw', 'N/A')
-             source = bullet_data.get('source_raw', 'Unknown Source')
-             # Format date for citation (M/D/YY)
-             raw_bullet_date = bullet_data.get('date_raw')
-             formatted_date_mdy = 'Date Unknown' # Default fallback
-             if raw_bullet_date:
-                 try:
-                     # Assuming date_raw is in YYYYMMDD format
-                     dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
-                     # Use %#m/%#d/%y for Windows to remove leading zeros
-                     formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
-                 except (ValueError, TypeError):
-                      # If parsing fails, use the raw value as fallback
-                      formatted_date_mdy = str(raw_bullet_date)
+        for bullet_data in extracted_bullets_raw:
+            logging.debug(f"Processing bullet_data: {bullet_data}")
+            headline = bullet_data.get('headline_raw', 'N/A')
+            formatted_body = bullet_data.get('body_raw', 'N/A')
+            source = bullet_data.get('source_raw', 'Unknown Source')
+            raw_bullet_date = bullet_data.get('date_raw')
+            formatted_date_mdy = 'Date Unknown'
+            if raw_bullet_date:
+                try:
+                    dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
+                    formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
+                except (ValueError, TypeError):
+                    formatted_date_mdy = str(raw_bullet_date)
 
-             # Escape source and date components BEFORE creating the citation string
-             safe_source = html.escape(source)
-             safe_formatted_date_mdy = html.escape(formatted_date_mdy)
+            safe_source = html.escape(source)
+            safe_formatted_date_mdy = html.escape(formatted_date_mdy)
 
-             if url and url != '#':
-                  # Escape URL for the href attribute
-                  safe_url = html.escape(url.replace('"', '"')) # Replace quotes then escape
-                  if not safe_url.startswith(('http://', 'https://')): safe_url = 'http://' + safe_url
-                  # Use the already escaped date for the link text
-                  safe_link_text = safe_formatted_date_mdy
-                  citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>] ({type_input})'
-             else:
-                  # Use already escaped components
-                  citation = f'[{safe_source}, {safe_formatted_date_mdy}] ({type_input})'
+            if url and url != '#':
+                safe_url = html.escape(url.replace('"', '"'))
+                if not safe_url.startswith(('http://', 'https://')):
+                    safe_url = 'http://' + safe_url
+                safe_link_text = safe_formatted_date_mdy
+                citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>] ({type_input})'
+            else:
+                citation = f'[{safe_source}, {safe_formatted_date_mdy}] ({type_input})'
 
-             # Escape the main headline and body text
-             # Apply strict title case to the headline before escaping
-             title_cased_headline = apply_strict_title_case_every_word(headline)
-             safe_headline = html.escape(title_cased_headline)
-             safe_body = html.escape(formatted_body)
+            title_cased_headline = apply_strict_title_case_every_word(headline)
+            safe_headline = html.escape(title_cased_headline)
+            safe_body = html.escape(formatted_body)
 
-             # Append the HTML for the formatted bullet point (uses already escaped parts)
-             html_parts.append("<div class=\"bullet\">")
-             html_parts.append(f"<p><b>{safe_headline}</b> \"{safe_body}\" {citation}</p>")
-             html_parts.append("</div>")
+            html_parts.append("<div class=\"bullet\">")
+            html_parts.append(f"<p><b>{safe_headline}</b> \"{safe_body}\" {citation}</p>")
+            html_parts.append("</div>")
     else:
         html_parts.append("<p>No relevant bullets were extracted. Using Bullets</p>")
-    html_parts.append("</div>") # Close bullets-container
-
+    html_parts.append("</div>")
 
     # --- Full Transcript Section ---
     html_parts.append("<h3>TRANSCRIPT</h3>")
-    safe_transcript = html.escape(transcript_text if transcript_text else "Transcript unavailable.")
-    # html_parts.append(f"<div class=\"transcript\">{safe_transcript}</div>")
-    html_parts.append(transcript_text)  # Already wrapped in <p> tags
+    html_parts.append(transcript_text if transcript_text else "Transcript unavailable.")
     
     # --- Closing HTML ---
-    html_parts.append("</div>")  # Close research-dossier
-    html_parts.append("</body></html>")
+    html_parts.append("</div>")
+    if html_or_docx == "html":
+        html_parts.append("</body></html>")
 
     logging.info("HTML report string generated.")
     return "\n".join(html_parts)
-
-
