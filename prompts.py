@@ -95,7 +95,7 @@ Example input: I think the candidate for Mayor is a bad choice.
 
 TEXT_HIGHLIGHT_DEBATE_PROMPT_TEMPLATE = """# ROLE: Meticulous Communications Analyst & Information Extractor. Follow every rule exactly.
 
-# GOAL: Extract specific and impactful political statements, claims, or contrasts from ALL participants in the debate. Attribute each bullet to the person who spoke or was directly discussed.
+# GOAL: Identify each debate question and summarize every candidate’s answer beneath that question.
 
 # --- CONTEXTUAL METADATA (Use for source/date identification) ---
 # Source Title: {video_title}
@@ -111,36 +111,38 @@ TEXT_HIGHLIGHT_DEBATE_PROMPT_TEMPLATE = """# ROLE: Meticulous Communications Ana
 
 # ================== INSTRUCTIONS ==================
 
-1. **Extract bullet points** based ONLY on the transcript above.
-2. Maintain chronological order. The bullet points must appear in the same order the statements occur in the transcript.
-3. **Each bullet should reflect a SINGLE, standalone factual or rhetorical claim** made by or directly about a specific participant. Do not merge multiple claims.
-4. Always include the speaking participant in the headline so it is clear who made the claim (e.g., "Haley argued...", "Moderator pressed Trump about...", "Ramaswamy criticized Haley...").
-5. Use the speaker’s own words where impactful, but keep bullets concise. When the claim is about another participant, make that clear in the headline.
-6. Include claims from moderators or interviewers when they present facts or challenges about a participant.
-7. Include ALL necessary details but avoid unnecessary synonyms or embellishment.
-8. Omit small talk and jokes unless they contain a meaningful claim or contrast.
-9. When in doubt about including a statement, include it—err on the side of capturing key debate exchanges.
-10. Do NOT assume a name unless explicitly stated in the transcript. If a participant is referenced without a name, use their role (e.g., "Moderator", "Candidate").
-    
+1. Scan the transcript in order and locate each moderator/host question (or audience question). Treat each distinct question as one highlight block.
+2. For each question, capture:
+   - The exact question text (paraphrase only if needed for clarity).
+   - A concise summary of every candidate’s answer to that question.
+3. Maintain chronological order matching the debate flow. Do not reorder.
+4. When summarizing answers, name the candidate and give a single-sentence summary of their response. Keep to one claim per candidate.
+5. Omit small talk or applause unless it contains a substantive answer.
+6. Do NOT assume names; use the name/label given in the transcript (e.g., “Adam Steen”, “Moderator”, “Candidate A”).
+
 # ================== OUTPUT FORMAT (PLAIN TEXT ONLY) ==================
 
-# For EACH bullet point extracted, output EXACTLY the following block structure, using "@@DELIM@@" as the separator:
+# For EACH question and its answers, output EXACTLY the following block structure, using "@@DELIM@@" as the separator:
 
 *** BULLET START ***
-**Headline:** [Concise PAST TENSE Summary (Accurately Attributed Actor) + Period. Do not include any quotations from the transcript. The output should be a clean list of highlights ready for insertion into a “Highlights” section of a tracking report.]
+**Headline:** [The question text, phrased as a question. Plain text, end with a question mark.]
+@@DELIM@@
+**Body:** 
+- [Name]: [One-sentence summary of their answer.]
+- [Name]: [One-sentence summary of their answer.]
 @@DELIM@@
 *** BULLET END ***
 
-# Repeat the entire "*** BULLET START ***" to "*** BULLET END ***" block for each bullet.
+# Repeat the entire "*** BULLET START ***" to "*** BULLET END ***" block for each question.
 # Put a single blank line between each "*** BULLET END ***" and the next "*** BULLET START ***".
 
 # == CRITICAL: DO NOT ==
-#   *   DO NOT output JSON.
-#   *   DO NOT add any text before the first "*** BULLET START ***" (unless it's "@@NO BULLETS FOUND@@").
-#   *   DO NOT add any text after the final "*** BULLET END ***".
-#   *   DO NOT use markdown formatting (like **). Use the exact delimiters shown.
-#   *   DO NOT apply Title Case formatting to the **Headline:** output. Python code will handle capitalization later.
-#   *   DO NOT add surrounding double quotes or prefixes like "According to..." to the **Body:** output field.
+#   * DO NOT output JSON.
+#   * DO NOT add any text before the first "*** BULLET START ***" (unless it's "@@NO BULLETS FOUND@@").
+#   * DO NOT add any text after the final "*** BULLET END ***".
+#   * DO NOT use markdown formatting beyond what is shown. Use the exact delimiters.
+#   * DO NOT apply Title Case to the **Headline:** output.
+#   * DO NOT add extra commentary—only the question and summarized answers.
 
 # Begin Extraction:
 """

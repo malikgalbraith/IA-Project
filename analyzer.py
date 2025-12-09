@@ -271,10 +271,10 @@ def extract_raw_data_from_text(
                 part = part.strip()
                 if part.startswith("**Headline:**"):
                     bullet_data['headline_raw'] = part[len("**Headline:**"):].strip()
+                elif part.startswith("**Body:**"):
+                    bullet_data['body_raw'] = part[len("**Body:**"):].strip()
                 elif part.startswith("**Speaker:**") and prompt_type == "format_text_bullet_prompt":
                     bullet_data['speaker_raw'] = part[len("**Speaker:**"):].strip()
-                elif part.startswith("**Body:**") and prompt_type == "format_text_bullet_prompt":
-                    bullet_data['body_raw'] = part[len("**Body:**"):].strip()
                 elif part.startswith("**Source:**") and prompt_type == "format_text_bullet_prompt":
                     bullet_data['source_raw'] = part[len("**Source:**"):].strip()
                 elif part.startswith("**Date:**") and prompt_type == "format_text_bullet_prompt":

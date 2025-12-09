@@ -329,38 +329,64 @@ def generate_report_highlights(
 
     # --- Bullets Section ---
     html_parts.append("<h3>HIGHLIGHTS</h3>")
-    html_parts.append("<ul class=\"bullets-list\">")
-    if extracted_bullets_raw:
-        for bullet_data in extracted_bullets_raw:
-            logging.debug(f"Processing bullet_data: {bullet_data}")
-            headline = bullet_data.get('headline_raw', 'N/A')
-            source = bullet_data.get('source_raw', 'Unknown Source')
-            raw_bullet_date = bullet_data.get('date_raw')
-            formatted_date_mdy = 'Date Unknown'
-            if raw_bullet_date:
-                try:
-                    dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
-                    formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
-                except (ValueError, TypeError):
-                    formatted_date_mdy = str(raw_bullet_date)
-
-            safe_source = html.escape(source)
-            safe_formatted_date_mdy = html.escape(formatted_date_mdy)
-
-            if url and url != '#':
-                safe_url = html.escape(url.replace('"', '"'))
-                if not safe_url.startswith(('http://', 'https://')):
-                    safe_url = 'http://' + safe_url
-                safe_link_text = safe_formatted_date_mdy
-                citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>]'
-            else:
-                citation = f'[{safe_source}, {safe_formatted_date_mdy}]'
-
-            safe_headline = html.escape(headline)
-            html_parts.append(f"<li>{safe_headline}</li>")
+    if is_debate:
+        html_parts.append("<div class=\"bullets-container\">")
+        if extracted_bullets_raw:
+            for bullet_data in extracted_bullets_raw:
+                question = bullet_data.get('headline_raw', 'Question')
+                answers_raw = bullet_data.get('body_raw', '') or ''
+                html_parts.append("<div class=\"bullet\">")
+                html_parts.append(f"<p><b>{html.escape(question)}</b></p>")
+                answers = []
+                for line in answers_raw.splitlines():
+                    cleaned = line.strip()
+                    if not cleaned:
+                        continue
+                    if cleaned.startswith("-"):
+                        cleaned = cleaned.lstrip("-").strip()
+                    answers.append(cleaned)
+                if answers:
+                    html_parts.append("<ul class=\"bullets-list\">")
+                    for ans in answers:
+                        html_parts.append(f"<li>{html.escape(ans)}</li>")
+                    html_parts.append("</ul>")
+                html_parts.append("</div>")
+        else:
+            html_parts.append("<p>No relevant questions were extracted.</p>")
+        html_parts.append("</div>")
     else:
-        html_parts.append("<p>No relevant bullets were extracted. Using Highlights</p>")
-    html_parts.append("</ul>")
+        html_parts.append("<ul class=\"bullets-list\">")
+        if extracted_bullets_raw:
+            for bullet_data in extracted_bullets_raw:
+                logging.debug(f"Processing bullet_data: {bullet_data}")
+                headline = bullet_data.get('headline_raw', 'N/A')
+                source = bullet_data.get('source_raw', 'Unknown Source')
+                raw_bullet_date = bullet_data.get('date_raw')
+                formatted_date_mdy = 'Date Unknown'
+                if raw_bullet_date:
+                    try:
+                        dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
+                        formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
+                    except (ValueError, TypeError):
+                        formatted_date_mdy = str(raw_bullet_date)
+
+                safe_source = html.escape(source)
+                safe_formatted_date_mdy = html.escape(formatted_date_mdy)
+
+                if url and url != '#':
+                    safe_url = html.escape(url.replace('"', '"'))
+                    if not safe_url.startswith(('http://', 'https://')):
+                        safe_url = 'http://' + safe_url
+                    safe_link_text = safe_formatted_date_mdy
+                    citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>]'
+                else:
+                    citation = f'[{safe_source}, {safe_formatted_date_mdy}]'
+
+                safe_headline = html.escape(headline)
+                html_parts.append(f"<li>{safe_headline}</li>")
+        else:
+            html_parts.append("<p>No relevant bullets were extracted. Using Highlights</p>")
+        html_parts.append("</ul>")
 
     # --- Full Transcript Section ---
     html_parts.append("<h3>TRANSCRIPT</h3>")
@@ -709,38 +735,64 @@ def generate_report_both(
 
     # --- Highlights Section ---
     html_parts.append("<h3>HIGHLIGHTS</h3>")
-    html_parts.append("<ul class=\"bullets-list\">")
-    if extracted_highlights_raw:
-        for bullet_data in extracted_highlights_raw:
-            logging.debug(f"Processing bullet_data: {bullet_data}")
-            headline = bullet_data.get('headline_raw', 'N/A')
-            source = bullet_data.get('source_raw', 'Unknown Source')
-            raw_bullet_date = bullet_data.get('date_raw')
-            formatted_date_mdy = 'Date Unknown'
-            if raw_bullet_date:
-                try:
-                    dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
-                    formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
-                except (ValueError, TypeError):
-                    formatted_date_mdy = str(raw_bullet_date)
-
-            safe_source = html.escape(source)
-            safe_formatted_date_mdy = html.escape(formatted_date_mdy)
-
-            if url and url != '#':
-                safe_url = html.escape(url.replace('"', '"'))
-                if not safe_url.startswith(('http://', 'https://')):
-                    safe_url = 'http://' + safe_url
-                safe_link_text = safe_formatted_date_mdy
-                citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>]'
-            else:
-                citation = f'[{safe_source}, {safe_formatted_date_mdy}]'
-
-            safe_headline = html.escape(headline)
-            html_parts.append(f"<li>{safe_headline}</li>")
+    if is_debate:
+        html_parts.append("<div class=\"bullets-container\">")
+        if extracted_highlights_raw:
+            for bullet_data in extracted_highlights_raw:
+                question = bullet_data.get('headline_raw', 'Question')
+                answers_raw = bullet_data.get('body_raw', '') or ''
+                html_parts.append("<div class=\"bullet\">")
+                html_parts.append(f"<p><b>{html.escape(question)}</b></p>")
+                answers = []
+                for line in answers_raw.splitlines():
+                    cleaned = line.strip()
+                    if not cleaned:
+                        continue
+                    if cleaned.startswith("-"):
+                        cleaned = cleaned.lstrip("-").strip()
+                    answers.append(cleaned)
+                if answers:
+                    html_parts.append("<ul class=\"bullets-list\">")
+                    for ans in answers:
+                        html_parts.append(f"<li>{html.escape(ans)}</li>")
+                    html_parts.append("</ul>")
+                html_parts.append("</div>")
+        else:
+            html_parts.append("<p>No relevant questions were extracted.</p>")
+        html_parts.append("</div>")
     else:
-        html_parts.append("<p>No relevant bullets were extracted. Using Highlights</p>")
-    html_parts.append("</ul>")
+        html_parts.append("<ul class=\"bullets-list\">")
+        if extracted_highlights_raw:
+            for bullet_data in extracted_highlights_raw:
+                logging.debug(f"Processing bullet_data: {bullet_data}")
+                headline = bullet_data.get('headline_raw', 'N/A')
+                source = bullet_data.get('source_raw', 'Unknown Source')
+                raw_bullet_date = bullet_data.get('date_raw')
+                formatted_date_mdy = 'Date Unknown'
+                if raw_bullet_date:
+                    try:
+                        dt_obj_bullet = datetime.strptime(str(raw_bullet_date), "%Y%m%d")
+                        formatted_date_mdy = dt_obj_bullet.strftime("%#m/%#d/%y")
+                    except (ValueError, TypeError):
+                        formatted_date_mdy = str(raw_bullet_date)
+
+                safe_source = html.escape(source)
+                safe_formatted_date_mdy = html.escape(formatted_date_mdy)
+
+                if url and url != '#':
+                    safe_url = html.escape(url.replace('"', '"'))
+                    if not safe_url.startswith(('http://', 'https://')):
+                        safe_url = 'http://' + safe_url
+                    safe_link_text = safe_formatted_date_mdy
+                    citation = f'[{safe_source}, <a href="{safe_url}" target="_blank" rel="noopener noreferrer"><em>{safe_link_text}</em></a>]'
+                else:
+                    citation = f'[{safe_source}, {safe_formatted_date_mdy}]'
+
+                safe_headline = html.escape(headline)
+                html_parts.append(f"<li>{safe_headline}</li>")
+        else:
+            html_parts.append("<p>No relevant bullets were extracted. Using Highlights</p>")
+        html_parts.append("</ul>")
      
     # --- Bullets Section ---
     html_parts.append("<h3>BULLETS</h3>")
