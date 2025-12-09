@@ -116,9 +116,10 @@ TEXT_HIGHLIGHT_DEBATE_PROMPT_TEMPLATE = """# ROLE: Meticulous Communications Ana
    - The exact question text (paraphrase only if needed for clarity).
    - A concise summary of every candidate’s answer to that question.
 3. Maintain chronological order matching the debate flow. Do not reorder.
-4. When summarizing answers, name the candidate and give a single-sentence summary of their response. Keep to one claim per candidate.
-5. Omit small talk or applause unless it contains a substantive answer.
-6. Do NOT assume names; use the name/label given in the transcript (e.g., “Adam Steen”, “Moderator”, “Candidate A”).
+4. When summarizing answers, name the candidate and give a single-sentence summary of their response. Keep to one claim per candidate. Include a short direct quote in double quotes if it conveys the core point (e.g., “life at conception”).
+5. Capture every candidate who answers. If the transcript does not show an answer for a candidate, note “No response captured.”
+6. Omit small talk or applause unless it contains a substantive answer.
+7. Do NOT assume names; use the name/label given in the transcript (e.g., “Adam Steen”, “Moderator”, “Candidate A”).
 
 # ================== OUTPUT FORMAT (PLAIN TEXT ONLY) ==================
 
