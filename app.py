@@ -91,7 +91,7 @@ if check_password():
     
     # UI layout
     st.title("TrackGPT: Tracking Report Tool")
-    url = "https://docs.google.com/document/d/1SR45h_w20Vn1-KrCRfAfkf2E2-aDvH-mXu8S2eA4630/edit?usp=sharing"
+    url = "https://docs.google.com/document/d/19TQdYosmmvVJ_0APFzUdvD6eOv2tm8YJQYXU6MWka_M/edit?usp=sharing"
     st.markdown("Questions? Check out the [TrackGPT Instructions](%s)" % url)
     
     st.markdown(
